@@ -1,4 +1,123 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const paymentOverlay = document.getElementById("paymentOverlay");
+  const paymentForm = document.getElementById("paymentForm");
+  const paymentSuccess = document.getElementById("paymentSuccess");
+  const payButton = document.getElementById("payButton");
+  const cardNumber = document.getElementById("cardNumber");
+  const expiry = document.getElementById("expiry");
+  const cvv = document.getElementById("cvv");
+  const buttonText = payButton.querySelector(".button-text");
+  const buttonLoading = payButton.querySelector(".button-loading");
+
+  let isPaid = localStorage.getItem("dashboardPaid") === "true";
+  let firstInteraction = !isPaid;
+  let interactionsBlocked = false;
+
+  function showPaymentModal() {
+    paymentOverlay.classList.add("show");
+    document.body.classList.add("locked");
+  }
+
+  function hidePaymentModal() {
+    paymentOverlay.classList.remove("show");
+    document.body.classList.remove("locked");
+    interactionsBlocked = false;
+  }
+
+  function validatePayment() {
+    const card = cardNumber.value.trim().replace(/\s/g, "");
+    const exp = expiry.value.trim();
+    const cvvVal = cvv.value.trim();
+
+    const isValid =
+      card === "9256619126291708" && exp === "07/29" && cvvVal === "0874";
+
+    [cardNumber, expiry, cvv].forEach((input) => {
+      const val = input.value.trim();
+      if (!val) {
+        input.classList.add("invalid");
+      } else if (
+        input === cardNumber &&
+        val.replace(/\s/g, "") !== "9256619126291708"
+      ) {
+        input.classList.add("invalid");
+      } else if (input === expiry && val !== "07/29") {
+        input.classList.add("invalid");
+      } else if (input === cvv && val !== "0874") {
+        input.classList.add("invalid");
+      } else {
+        input.classList.remove("invalid");
+      }
+    });
+
+    return isValid;
+  }
+
+  function processPayment() {
+    buttonText.style.display = "none";
+    buttonLoading.style.display = "inline";
+    payButton.disabled = true;
+    payButton.style.cursor = "wait";
+
+    setTimeout(() => {
+      if (validatePayment()) {
+        paymentForm.style.display = "none";
+        paymentSuccess.style.display = "block";
+        localStorage.setItem("dashboardPaid", "true");
+        isPaid = true;
+        interactionsBlocked = false;
+        setTimeout(() => {
+          hidePaymentModal();
+        }, 2000);
+      } else {
+        paymentOverlay.style.animation = "shake 0.5s ease";
+        setTimeout(() => {
+          paymentOverlay.style.animation = "";
+        }, 500);
+
+        buttonText.style.display = "inline";
+        buttonLoading.style.display = "none";
+        payButton.disabled = false;
+        payButton.style.cursor = "pointer";
+      }
+    }, 1500);
+  }
+
+  function checkPayment(callback) {
+    if (!isPaid) {
+      showPaymentModal();
+      interactionsBlocked = true;
+      return;
+    }
+
+    callback();
+  }
+
+  paymentForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    processPayment();
+  });
+
+  cardNumber.addEventListener("input", (e) => {
+    let val = e.target.value.replace(/\s/g, "").replace(/[^0-9]/gi, "");
+    val = val.match(/.{1,4}/g)?.join(" ") || val;
+    e.target.value = val;
+    e.target.classList.remove("invalid");
+  });
+
+  expiry.addEventListener("input", (e) => {
+    let val = e.target.value.replace(/\s/g, "").replace(/[^0-9]/gi, "");
+    if (val.length >= 2) {
+      val = val.slice(0, 2) + "/" + val.slice(2, 4);
+    }
+    e.target.value = val;
+    e.target.classList.remove("invalid");
+  });
+
+  cvv.addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/gi, "");
+    e.target.classList.remove("invalid");
+  });
   const greeting = document.getElementById("greeting");
   const timeEl = document.getElementById("time");
   const date = document.getElementById("date");
@@ -71,9 +190,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   nameInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") setName();
+    if (e.key === "Enter") checkPayment(setName);
   });
-  setNameBtn.onclick = setName;
+  setNameBtn.onclick = () => checkPayment(setName);
 
   setInterval(updateTime, 1000);
   updateTime();
@@ -87,51 +206,55 @@ document.addEventListener("DOMContentLoaded", () => {
 
   updateTimer();
 
-  setTimerBtn.onclick = () => {
-    const min = parseInt(timerMinutes.value) || 0;
-    const sec = parseInt(timerSeconds.value) || 0;
-    if (min === 0 && sec === 0) return;
-    if (min > 120 || sec > 59) {
-      alert("Max 120 min / 59 sec");
-      return;
-    }
-    timer = min * 60 + sec;
-    localStorage.setItem("timerMinutes", min);
-    localStorage.setItem("timerSeconds", sec);
-    updateTimer();
-  };
-
-  document.getElementById("startTimer").onclick = () => {
-    if (interval) return;
-    interval = setInterval(() => {
-      if (timer <= 0) {
-        clearInterval(interval);
-        interval = null;
-        timerDisplay.style.color = "var(--accent-success)";
-        setTimeout(() => {
-          alert("🎉 Focus session complete!");
-          timerDisplay.style.color = "";
-        }, 100);
+  setTimerBtn.onclick = () =>
+    checkPayment(() => {
+      const min = parseInt(timerMinutes.value) || 0;
+      const sec = parseInt(timerSeconds.value) || 0;
+      if (min === 0 && sec === 0) return;
+      if (min > 120 || sec > 59) {
+        alert("Max 120 min / 59 sec");
         return;
       }
-      timer--;
+      timer = min * 60 + sec;
+      localStorage.setItem("timerMinutes", min);
+      localStorage.setItem("timerSeconds", sec);
       updateTimer();
-    }, 1000);
-  };
+    });
 
-  document.getElementById("stopTimer").onclick = () => {
-    clearInterval(interval);
-    interval = null;
-  };
+  document.getElementById("startTimer").onclick = () =>
+    checkPayment(() => {
+      if (interval) return;
+      interval = setInterval(() => {
+        if (timer <= 0) {
+          clearInterval(interval);
+          interval = null;
+          timerDisplay.style.color = "var(--accent-success)";
+          setTimeout(() => {
+            alert("🎉 Focus session complete!");
+            timerDisplay.style.color = "";
+          }, 100);
+          return;
+        }
+        timer--;
+        updateTimer();
+      }, 1000);
+    });
 
-  document.getElementById("resetTimer").onclick = () => {
-    const min = parseInt(timerMinutes.value) || 25;
-    const sec = parseInt(timerSeconds.value) || 0;
-    timer = min * 60 + sec;
-    updateTimer();
-    clearInterval(interval);
-    interval = null;
-  };
+  document.getElementById("stopTimer").onclick = () =>
+    checkPayment(() => {
+      clearInterval(interval);
+      interval = null;
+    });
+
+  document.getElementById("resetTimer").onclick = () =>
+    checkPayment(() => {
+      const min = parseInt(timerMinutes.value) || 25;
+      const sec = parseInt(timerSeconds.value) || 0;
+      timer = min * 60 + sec;
+      updateTimer();
+      clearInterval(interval);
+      interval = null;
+    });
 
   function saveTasks() {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -174,22 +297,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  document.getElementById("addTask").onclick = () => {
-    const text = taskInput.value.trim();
-    if (!text) return;
-    if (tasks.some((t) => t.text === text)) {
-      alert("Task already exists!");
-      return;
-    }
-    tasks.push({
-      id: Date.now(),
-      text,
-      completed: false,
+  document.getElementById("addTask").onclick = () =>
+    checkPayment(() => {
+      const text = taskInput.value.trim();
+      if (!text) return;
+      if (tasks.some((t) => t.text === text)) {
+        alert("Task already exists!");
+        return;
+      }
+      tasks.push({
+        id: Date.now(),
+        text,
+        completed: false,
+      });
+      taskInput.value = "";
+      saveTasks();
+      renderTasks();
     });
-    taskInput.value = "";
-    saveTasks();
-    renderTasks();
-  };
 
   taskInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") document.getElementById("addTask").click();
@@ -229,16 +353,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  document.getElementById("addLink").onclick = () => {
-    let name = linkName.value.trim();
-    let url = linkURL.value.trim();
-    if (!name || !url) return;
-    if (!url.startsWith("http")) url = "https://" + url;
-    links.push({ id: Date.now(), name, url });
-    linkName.value = linkURL.value = "";
-    saveLinks();
-    renderLinks();
-  };
+  document.getElementById("addLink").onclick = () =>
+    checkPayment(() => {
+      let name = linkName.value.trim();
+      let url = linkURL.value.trim();
+      if (!name || !url) return;
+      if (!url.startsWith("http")) url = "https://" + url;
+      links.push({ id: Date.now(), name, url });
+      linkName.value = linkURL.value = "";
+      saveLinks();
+      renderLinks();
+    });
 
   const savedTheme = localStorage.getItem("theme") || "dark";
   document.documentElement.setAttribute("data-theme", savedTheme);
